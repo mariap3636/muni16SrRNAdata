@@ -1,0 +1,274 @@
+---
+title: "STOIK dataset"
+output: 
+  html_document: 
+    toc: true
+    fig_height: 13
+    fig_width: 14
+    
+---
+    
+
+
+```{r setup, include=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+
+
+library(energy)
+
+load("TOIK-data-for-maria.rdata")
+library(zCompositions)
+source("modifiedCmultRepl.R")
+#debugged to allow using gbm prior see diff with cmultRepl
+
+library(gtools)
+library(compositions)
+library(robCompositions)
+
+
+```
+
+
+## Bayesian-Multiplicative replacement of count zeros
+
+Zero counts, assumed to be a consequence of the sampling process (insufficient sampling),are imputed under a Bayesian paradigm ('GBM', 'SQ' or 'BL' method)
+     by posterior estimates of the multinomial probabilities generating
+     the counts, assuming a Dirichlet prior distribution. The argument
+     'method' sets the Dirichlet hyper-parameters 't' (priori estimates
+     of multinomial probabilities) and 's' (_strength_). The user can
+     specify their own by setting 'method="user"' and entering them as
+     't' and 's' arguments. Note that, under certain circumstances (see
+     references for details), these methods can generate imputed
+     proportions falling above the lowest estimated probability of a
+     multinomial part (_c_/_n_, where _c_ is the count and _n_ is the
+     number of trials). In such cases, the imputation is corrected by
+     using a fraction ('delta') of the minimum _c_/_n_ for that part.
+     Lastly, the non-zero parts are multiplicatively adjusted according
+     to their compositional nature.
+
+     On the other hand, 'method="CZM"' uses multiplicative simple
+     replacement ('multRepl') on the matrix of estimated probabilities.
+     The upper limit and the fraction delta used are specified by,
+     respectively, the arguments 'threshold' and 'delta'. Suggested
+     values are 'threshold=0.5' (so the upper limit for a multinomial
+     probability turns out to be 0.5/_n_), and 'delta=0.65' (so the
+
+
+```{r whereAreWeInFileSystem}
+#
+getwd()
+
+stolice_L7_abs[1:3,1:3]
+```
+
+
+```{r ZeroReplace}
+#
+
+
+ #input dataset 
+BayesianMultiplicative2ReplacedCountZerosL7.r =  stolice_L7_abs 
+
+
+# using GBM prior ... use the fixed version!!! 
+#modifiedC
+BayesianMultiplicative2ReplacedCountZerosL7.gbm <- modifiedCmultRepl(t(BayesianMultiplicative2ReplacedCountZerosL7.r),  label=0, method="GBM",output = "counts")
+
+
+
+BayesianMultiplicative2ReplacedCountZerosL7.gbm[1:3,1:3]
+
+
+# using SQ prior ...
+
+BayesianMultiplicative2ReplacedCountZerosL7.sq <- cmultRepl(t(BayesianMultiplicative2ReplacedCountZerosL7.r),  label=0, method="SQ",output = "counts")
+
+# using BL prior ...
+
+BayesianMultiplicative2ReplacedCountZerosL7.bl <- cmultRepl(t(BayesianMultiplicative2ReplacedCountZerosL7.r),  label=0, method="BL",output = "counts")
+
+
+# using CZM approach ...
+BayesianMultiplicative2ReplacedCountZerosL7.czm <- cmultRepl(t(BayesianMultiplicative2ReplacedCountZerosL7.r),  label=0, method="CZM",output = "counts")
+
+
+save(BayesianMultiplicative2ReplacedCountZerosL7.czm,BayesianMultiplicative2ReplacedCountZerosL7.bl,BayesianMultiplicative2ReplacedCountZerosL7.sq, BayesianMultiplicative2ReplacedCountZerosL7.gbm,file="ZerosReplacedinputDatasetL7.RData")
+
+#load("ZerosReplacedinputDatasetL7.RData")
+
+#load("ZerosReplacedinputDatasetL7.RData")
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pcaANDdendro, echo=TRUE, include=TRUE}
+old.par <- par()
+###### create a complex object with all combinations of zeros replacement and log transformation approaches
+
+combiObj=list()
+vectorOfComb=vector()#vector(mode="numeric",length=12)
+for(stringMeth in c("sq","bl","gbm","czm")){ #,"czm","clrsq","clrbl","clrgbm","clrczm"
+
+temp.pattern=paste("*",stringMeth,"$",sep="")
+string2eval=ls(pattern=glob2rx(temp.pattern))
+#example of how string2eval looks like: "BayesianMultiplicativeReplaceCountZerosL7.czm"
+
+combiObj[[stringMeth]]<-as.data.frame(eval(parse(text=string2eval)))#ls()[i]
+
+cat(stringMeth,"\n")
+show(dim(combiObj[[stringMeth]]))
+
+## applying total sum scaling approach : tss values wanted to have compositions
+
+#combiObj[[stringMeth]][[stringMeth]] <- combiObj[[stringMeth]]
+
+# this does not work because apply does some unwanted extra:  combiObj[[stringMeth]][["test"]] <- apply(combiObj[[stringMeth]][[stringMeth]], 1, function(x){x/sum(x)})
+
+# this works fine
+
+tempLabelForProp=paste(stringMeth,'tss',sep="_")
+
+#combiObj[[stringMeth]][[tempLabelForProp]]<-combiObj[[stringMeth]][[stringMeth]]/rowSums(combiObj[[stringMeth]][[stringMeth]])
+
+combiObj[[tempLabelForProp]]<-combiObj[[stringMeth]]/rowSums(combiObj[[stringMeth]])
+
+#show(dim(combiObj[[stringMeth]][[stringMeth]]))
+show(dim(combiObj[[stringMeth]]))
+show(dim(combiObj[[tempLabelForProp]]))
+
+
+vectorOfComb=c(vectorOfComb,tempLabelForProp)
+
+
+## log transform
+# applying log transform to compositions ( total sum scaling values ) 
+# the next steps...for each zeros replacement method you want to apply a log transform approach...
+
+for(logTransform in c("cenLR","addLR")){#,"clr","alr") 
+
+string2eval2=paste("combiObj[[\"",tempLabelForProp,"\"]]",sep="")
+#string2eval2
+x<-eval(parse(text =paste(logTransform,"(",string2eval2,")")))
+
+#combiObj[[tempLabelForProp]][["LOGT"]]=list()
+tempLabelForPropLogT=paste(tempLabelForProp,logTransform,sep="_")
+combiObj[[tempLabelForPropLogT]] <- as.data.frame(x$x) #eval(parse(text =paste(logTransform,"(",string2eval,")"))))
+
+vectorOfComb=c(vectorOfComb,tempLabelForPropLogT) # paste(stringMeth,logTransform,sep="_")
+
+}
+
+for(logTransform in c("ilr")){#,"clr","alr")
+
+string2eval2=paste("combiObj[[\"",tempLabelForProp,"\"]]",sep="")
+
+tempLabelForPropLogT=paste(tempLabelForProp,logTransform,sep="_")
+combiObj[[tempLabelForPropLogT]] <- eval(parse(text =paste(logTransform,"(",string2eval,")")))
+ 
+vectorOfComb=c(vectorOfComb,tempLabelForPropLogT) #paste(stringMeth,logTransform,sep="_")
+ 
+}
+
+}
+
+
+vectorOfComb
+
+### create different kind of inputs for multivariate analysis and comparison....both isolation kits .....
+### all the 3 different sample collection strategies
+
+################ visualization by pca
+#### hierarchical clustering
+
+EHCres=list()
+mat<- matrix(NaN, nrow = 16, ncol=2, byrow = TRUE, dimnames = list(seq(1:16) ,c("PC1","PC2")))
+rownames(mat)<-vectorOfComb
+
+for(combi in vectorOfComb ){
+
+subsetIdx.1=grep("\\.S1\\.1$",rownames(combiObj[[combi]]))
+
+subsetIdx.2=grep("\\.S2\\.1$",rownames(combiObj[[combi]]))
+
+subsetIdx.3=grep("\\.S3\\.1$",rownames(combiObj[[combi]]))
+
+subsetIdx.4=grep("\\.S1\\.2$",rownames(combiObj[[combi]]))
+
+subsetIdx.5=grep("\\.S2\\.2$",rownames(combiObj[[combi]]))
+
+subsetIdx.6=grep("\\.S3\\.2$",rownames(combiObj[[combi]]))
+
+
+df2prcomp=rbind(
+
+combiObj[[combi]][subsetIdx.1,],
+combiObj[[combi]][subsetIdx.2,],
+combiObj[[combi]][subsetIdx.3,],
+combiObj[[combi]][subsetIdx.4,],
+combiObj[[combi]][subsetIdx.5,],
+combiObj[[combi]][subsetIdx.6,]
+
+)
+
+subsetIdx=c(subsetIdx.1,subsetIdx.2,subsetIdx.3,subsetIdx.4,subsetIdx.5,subsetIdx.6)
+
+pcx.abund <- prcomp(df2prcomp)
+
+mat[rownames(mat)==paste(stringMeth,logTransform,sep="_"),colnames(mat)=="PC1"]<-pcx.abund$sdev[1]^2/mvar(combiObj[[combi]])
+mat[rownames(mat)==paste(stringMeth,logTransform,sep="_"),colnames(mat)=="PC2"]<-pcx.abund$sdev[2]^2/mvar(combiObj[[combi]])
+
+palette=colors()[2:17]  #palette(c( rgb(0,0,1,0.6), rgb(1,0,0,0.6),rgb(.3,0,.3,0.6)))
+
+layout(matrix(c(1,2),1,2, byrow=T), widths=c(6,2), heights=c(8,3))
+
+par(mgp=c(2,0.5,0))
+
+plot(pcx.abund$x,col=c("yellow4","red","pink","brown","magenta","green","blue","grey70","black","coral","lavender","red4","gold","purple","olivedrab","turquoise2")[as.numeric(as.factor(substr(rownames(combiObj[[combi]][subsetIdx,]), 2, 4) ))],pch=c(21, 18, 24, 20,23,25)[as.numeric(as.factor(substr(rownames(combiObj[[combi]][subsetIdx,]), 7, 9)))],#as.vector(conds$cond)
+
+
+xlab=paste("PC1 ", round (sum(pcx.abund$sdev[1]^2)/mvar(combiObj[[combi]]),3), sep=""),
+
+
+ylab=paste("PC2 ", round (sum(pcx.abund$sdev[2]^2)/mvar(combiObj[[combi]]),3), sep=""),
+
+
+main=paste("Biplot data transf. -", combi, sep=""))
+
+
+legend("topleft", pch =c(21,24,23,20,25,18) , col="black", legend = unique((as.factor(substr(rownames(combiObj[[combi]][subsetIdx,]), 7, 9)))))
+
+#text(pcx.abund$x[,1],pcx.abund$x[,2],labels=substr(rownames(pcx.abund$x), 2, 4))
+
+barplot(pcx.abund$sdev^2/mvar(combiObj[[combi]]), ylab="variance explained",xlab="Component", main="Scree plot") # scree plot
+
+fn=paste("L7_",combi, ".pdf" ,sep="") #  stringMeth, "_" , logTransform
+dev.copy(pdf,file=fn)
+dev.off()
+
+EHCres[[combi]][[1]]<-energy.hclust(dist(combiObj[[combi]][subsetIdx,]))
+
+# the ground truth : 16 individuals each associated with 3 different sample collection method and 2 isolation kits; 16*3*2=96 
+
+g <- setNames(c(1:96), rownames(combiObj[[combi]])[subsetIdx]) 
+for(i in 1:16){
+#cat(i,"\n")
+togrep=substr(names(cutree(EHCres[[combi]][[1]], k=16))[i],2,4)
+mysubset=grep(togrep,names(cutree(EHCres[[combi]][[1]], k=16)))
+g[mysubset]<-i
+}
+
+par(cex=0.7, mar=c(15, 8, 4, 1))
+plot(EHCres[[combi]][[1]],hang=-1)
+EHCres[[combi]][[2]]<-table(cutree(EHCres[[combi]][[1]], k=16) == g)
+cat(combi,"\n")
+show(EHCres[[combi]][[2]])
+}
+
+
+
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
